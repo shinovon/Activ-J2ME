@@ -156,6 +156,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			if (s.startsWith("+")) s = s.substring(1);
 			if (s.length() != 11) {
 				loginState = 0;
+				display(errorAlert("Incorrect number format"));
 				return;
 			}
 			
@@ -171,6 +172,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			String s = clearNumber(smsCodeField.getString());
 			if (s.length() != 6) {
 				loginState = STATE_CODE_SENT;
+				display(errorAlert("Incorrect code format"));
 				return;
 			}
 			
@@ -229,8 +231,8 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			
 				if (j.has("error")) {
 					loginState = 0;
-					display(errorAlert(j.getString("message")));
-					return;
+					display(errorAlert(j.getString("message")), loginForm());
+					break;
 				}
 				
 				phoneNumber = j.getString("recipient");
@@ -255,8 +257,9 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				
 				display.setCurrent(f);
 			} catch (Exception e) {
+				loginState = 0;
 				e.printStackTrace();
-				display(errorAlert(e.toString()));
+				display(errorAlert(e.toString()), loginForm());
 			}
 			break;
 		}
@@ -281,11 +284,11 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					if (loginState == STATE_LOGGED_IN) {
 						loginState = 0;
 						display(errorAlert(j.getString("message")), loginForm());
-						return;
+						break;
 					}
 					loginState = STATE_CODE_SENT;
 					display(errorAlert(j.getString("message")));
-					return;
+					break;
 				}
 				
 				accessToken = j.getString("access_token");
@@ -298,7 +301,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					if (!"SUCCESS".equals(j.getString("status"))) {
 						loginState = 0;
 						display(errorAlert("Log in failed"), loginForm());
-						return;
+						break;
 					}
 					
 					currentMsisdn = phoneNumber;
@@ -318,7 +321,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					display(mainForm = mainForm());
 					ActivApp.run = RUN_MAIN;
 					run();
-					return;
+					break;
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
@@ -632,7 +635,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				hc.close();
 			} catch (IOException e) {}
 		}
-		System.out.println(res);
 		return res;
 	}
 	
@@ -666,14 +668,12 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				hc.close();
 			} catch (IOException e) {}
 		}
-		System.out.println(res);
 		return res;
 	}
 	
 	private static String proxyUrl(String url) {
-		System.out.println(url);
-//		if (url == null
-//				|| (!useProxy && (url.indexOf(";tw=") == -1 || !onlineResize))
+//		System.out.println(url);
+//		if (url == null || !useProxy
 //				|| proxyUrl == null || proxyUrl.length() == 0 || "https://".equals(proxyUrl)) {
 			return url;
 //		}
