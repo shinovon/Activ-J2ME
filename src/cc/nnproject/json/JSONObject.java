@@ -425,7 +425,7 @@ public class JSONObject {
 		return obj;
 	}
 
-	static Object parseJSON(String str) {
+	public static Object parseJSON(String str) {
 		char first = str.charAt(0);
 		int length = str.length() - 1;
 		char last = str.charAt(length);
@@ -595,8 +595,8 @@ public class JSONObject {
 					}
 					// decimal
 					if (str.indexOf('.') != -1 || str.indexOf('E') != -1 || "-0".equals(str))
-//						return new Double(Double.parseDouble(str));
-						return str;
+						return new Double(Double.parseDouble(str));
+//						return str;
 					if (first == '-') length--;
 					if (length > 8) // (str.length() - (str.charAt(0) == '-' ? 1 : 0)) >= 10
 						return new Long(Long.parseLong(str));
