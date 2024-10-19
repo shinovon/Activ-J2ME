@@ -16,6 +16,7 @@ import javax.microedition.lcdui.Form;
 import javax.microedition.lcdui.Gauge;
 import javax.microedition.lcdui.Item;
 import javax.microedition.lcdui.ItemCommandListener;
+import javax.microedition.lcdui.List;
 import javax.microedition.lcdui.Spacer;
 import javax.microedition.lcdui.StringItem;
 import javax.microedition.lcdui.TextField;
@@ -32,7 +33,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	private static final int RUN_AUTH = 2;
 	private static final int RUN_AUTH_ACTION = 3;
 	private static final int RUN_MAIN = 4;
-	private static final int RUN_SWITCH_ACCOUNT = 5;
 	
 	// login states
 	private static final int STATE_SENDING_CODE = 1;
@@ -45,9 +45,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	private static final String APIURL = "https://activ.kz/";
 
 	// fonts
-	private static final Font largefont = Font.getFont(0, 0, Font.SIZE_LARGE);
 	private static final Font medboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
-	private static final Font medfont = Font.getFont(0, 0, Font.SIZE_MEDIUM);
 	private static final Font smallboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_SMALL);
 	private static final Font smallfont = Font.getFont(0, 0, Font.SIZE_SMALL);
 	
@@ -58,12 +56,15 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	
 	// commands
 	private static Command exitCmd = new Command("Exit", Command.EXIT, 1);
+	private static Command accountCmd = new Command("Change account", Command.SCREEN, 3);
+	private static Command cancelCmd = new Command("Cancel", Command.CANCEL, 1);
 	
 	private static Command sendSmsCmd = new Command("Send SMS", Command.OK, 2);
 	private static Command confirmSmsCmd = new Command("Confirm", Command.OK, 2);
 	
 	// ui
 	private static Form mainForm;
+	private static List accountsList;
 
 	private static TextField phoneField;
 	private static TextField smsCodeField;
@@ -79,6 +80,8 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	private static long refreshTokenTime;
 	private static int expiresIn;
 	private static int subscriberId;
+	
+	private static JSONArray childAccounts;
 	
 	// threading
 	private static int run;
@@ -144,6 +147,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	public void commandAction(Command c, Displayable d) {
 		if (c == exitCmd) {
 			notifyDestroyed();
+			return;
 		}
 		if (c == sendSmsCmd) {
 			if (running || loginState != 0) return;
@@ -172,6 +176,34 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			
 			display(loadingAlert(), d);
 			start(RUN_AUTH);
+			return;
+		}
+		if (c == List.SELECT_COMMAND) {
+			int i = accountsList.getSelectedIndex();
+			if (i == -1) return;
+			if (i == accountsList.size() - 1) {
+				// log out
+				loginState = 0;
+				writeAuth();
+				display(loginForm());
+				return;
+			}
+			String msisdn = i == 0 ? phoneNumber : childAccounts.getObject(i - 1).getString("childMsisdn");
+			currentMsisdn = msisdn;
+			subscriberId = 0;
+			mainForm = null;
+			display(mainForm());
+
+			authRun = RUN_MAIN;
+			start(RUN_AUTH_ACTION);
+			return;
+		}
+		if (c == accountCmd) {
+			display(accountsList());
+			return;
+		}
+		if (c == cancelCmd) {
+			display(mainForm());
 			return;
 		}
 	}
@@ -322,12 +354,35 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			break;
 		}
 		case RUN_MAIN: {
-			// TODO
 			Form f = mainForm();
 			f.deleteAll();
 			
+			display(loadingAlert(), f);
+			
 			try {
+				if (currentMsisdn == null)
+					currentMsisdn = phoneNumber;
+				
+				if (subscriberId == 0) {
+					subscriberId = ((JSONObject) api("api/v1/optionals/getSubscriberId")).getInt("subscriberId");
+					writeAuth();
+				}
+				
 				JSONArray j;
+				if (!phoneNumber.equals(currentMsisdn) && childAccounts == null) {
+					String v = "{\"msisdn\":\"".concat(phoneNumber).concat("\"}");
+					
+					StringBuffer sb = new StringBuffer();
+					sb.append("[{\"operationName\":\"Profile\",\"variables\":")
+					.append(v)
+					.append(",\"query\":\"query Profile($msisdn: String) {\\n  Profile(msisdn: $msisdn) {\\n    id: msisdn\\n    isConfirmed\\n    isFullNameConfirmed\\n    fullName {\\n      firstName\\n      lastName\\n      middleName\\n      __typename\\n    }\\n    avatar {\\n      link\\n      __typename\\n    }\\n    project\\n    tariff {\\n      nextTariffDebitingDate\\n      chargeState\\n      id\\n      name\\n      cost\\n      duration {\\n        id\\n        name\\n        __typename\\n      }\\n      externalIdentifier: external_identifier\\n      __typename\\n    }\\n    customerStatus {\\n      displayText: display_text\\n      link\\n      externalId: external_id\\n      description: description\\n      __typename\\n    }\\n    phoneNumber: msisdn\\n    status\\n    email\\n    parentAccounts {\\n      name\\n      status\\n      mainMsisdn\\n      childMsisdn\\n      id\\n      newSettings {\\n        description\\n        id\\n        isEnabled: is_enabled\\n        modifiable\\n        operation\\n        __typename\\n      }\\n      __typename\\n    }\\n    childAccounts {\\n      name\\n      status\\n      mainMsisdn\\n      childMsisdn\\n      id\\n      __typename\\n    }\\n    cvmBonus {\\n      amount\\n      billingId\\n      startDate\\n      endDate\\n      maxAmount\\n      displayValue\\n      __typename\\n    }\\n    bundleServices {\\n      title: name\\n      isActivated\\n      __typename\\n    }\\n    packageBonusGroup {\\n      amount\\n      billingId\\n      displayValue\\n      endDate\\n      maxAmount\\n      name\\n      type\\n      unit {\\n        name\\n        code\\n        __typename\\n      }\\n      __typename\\n    }\\n    __typename\\n  }\\n}\\n\"}]");
+				
+					j = (JSONArray) apiPost("graphql", sb.toString().getBytes(), "application/json");
+
+					childAccounts = j.getObject(0).getObject("data").getObject("Profile").getArray("childAccounts");
+					if (childAccounts.size() == 0)
+						f.removeCommand(accountCmd);
+				}
 				{
 					String v = "{\"msisdn\":\"".concat(currentMsisdn).concat("\"}");
 					
@@ -342,9 +397,14 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				
 					j = (JSONArray) apiPost("graphql", sb.toString().getBytes(), "application/json");
 				}
-				System.out.println(j);
 				
 				JSONObject t = j.getObject(0).getObject("data").getObject("Profile");
+
+				if (phoneNumber.equals(currentMsisdn)) {
+					childAccounts = t.getArray("childAccounts");
+					if (childAccounts.size() == 0)
+						f.removeCommand(accountCmd);
+				}
 				
 				StringItem s;
 				Spacer p;
@@ -378,10 +438,13 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				mainForm.append(s);
 				
 				// цена тарифа
-				s = new StringItem("", t.getString("cost").concat(" tenge, due ").concat(t.getString("nextTariffDebitingDate")));
-				s.setFont(smallfont);
-				s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-				mainForm.append(s);
+				if (!t.isNull("cost")) {
+					String date = t.getString("nextTariffDebitingDate"); // TODO
+					s = new StringItem("", t.getString("cost").concat(" tenge").concat(date != null ? (", due ".concat(date)) : ""));
+					s.setFont(smallfont);
+					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
+					mainForm.append(s);
+				}
 				
 				// баланс
 				s = new StringItem("Balance",
@@ -397,25 +460,25 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				mainForm.append(p);
 				
 				// остаток тарифа
-				
-				s = new StringItem("", "Available");
-				s.setFont(medboldfont);
-				s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-				mainForm.append(s);
-				
 				JSONArray sum = j.getObject(2).getObject("data").getObject("Profile").getArray("bonusSum");
 				int l = sum.size();
-				
-				for(int i = 0; i < l; ++i) {
-					JSONObject k = sum.getObject(i);
-					g = new Gauge(k.getString("name")
-							+ " (" + (k.getBoolean("unlim", false) ?
-									"Unlimited" : (k.getString("displayValue") + " of " + k.getString("displayValueMax"))) + ")"
-							, false
-							, (int) (k.getDouble("maxAmount") * 10D)
-							, (int) (k.getDouble("amount") * 10D));
-					g.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
-					mainForm.append(g);
+				if (l != 0) {
+					s = new StringItem("", "Available");
+					s.setFont(medboldfont);
+					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
+					mainForm.append(s);
+					
+					for(int i = 0; i < l; ++i) {
+						JSONObject k = sum.getObject(i);
+						g = new Gauge(k.getString("name")
+								+ " (" + (k.getBoolean("unlim", false) ?
+										"Unlimited" : (k.getString("displayValue") + " of " + k.getString("displayValueMax"))) + ")"
+								, false
+								, (int) (k.getDouble("maxAmount") * 10D)
+								, (int) (k.getDouble("amount") * 10D));
+						g.setLayout(Item.LAYOUT_EXPAND | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
+						mainForm.append(g);
+					}
 				}
 
 				if (mainForm == f) 
@@ -424,10 +487,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				e.printStackTrace();
 				display(errorAlert(e.toString()), f);
 			}
-			break;
-		}
-		case RUN_SWITCH_ACCOUNT: {
-			// TODO
 			break;
 		}
 		}
@@ -495,9 +554,28 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		Form f = new Form("Activ");
 		f.setCommandListener(midlet);
 		f.addCommand(exitCmd);
-		mainForm = f;
+		f.addCommand(accountCmd);
 		
-		return f;
+		return mainForm = f;
+	}
+	
+	private List accountsList() {
+		if (accountsList != null) return accountsList;
+		List l = new List("Accounts", List.IMPLICIT);
+		l.addCommand(List.SELECT_COMMAND);
+		l.addCommand(cancelCmd);
+		l.setCommandListener(this);
+
+		l.append("My number", null);
+		
+		int size = childAccounts.size();
+		for (int i = 0; i < size; ++i) {
+			l.append(childAccounts.getObject(i).getString("name"), null);
+		}
+		
+		l.append("Log out", null);
+		
+		return accountsList = l;
 	}
 	
 	static void display(Alert a, Displayable d) {
@@ -521,14 +599,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		a.setType(AlertType.ERROR);
 		a.setString(text);
 		a.setTimeout(3000);
-		return a;
-	}
-	
-	private static Alert infoAlert(String text) {
-		Alert a = new Alert("");
-		a.setType(AlertType.CONFIRMATION);
-		a.setString(text);
-		a.setTimeout(1500);
 		return a;
 	}
 	
@@ -640,7 +710,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		
 		StringBuffer sb = new StringBuffer
 				("platform=web; brand=activ; locale=en; NEXT_LOCALE=en; remember_me_checked={%22isChecked%22:true}");
-		// TODO ?
 		sb.append("; region=Almaty; region_id=50000; city_id=50000; region_cover_id=40000; region_or_city_id=47; loyalty_city=1");
 		
 		if (loginState == STATE_LOGGED_IN) {

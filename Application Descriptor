@@ -1,7 +1,8 @@
 MIDlet-Vendor: nnproject
-MIDlet-Version: 0.0.1
+MIDlet-Version: 0.1.0
+MIDlet-Icon: /ic.png
 MicroEdition-Configuration: CLDC-1.1
-MIDlet-1: Activ,,ActivApp
+MIDlet-1: Activ,/ic.png,ActivApp
 MIDlet-Name: Activ
 MicroEdition-Profile: MIDP-2.0
 MIDlet-Jar-URL: Activ.jar
