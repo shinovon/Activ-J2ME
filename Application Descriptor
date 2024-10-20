@@ -1,5 +1,5 @@
 MIDlet-Vendor: nnproject
-MIDlet-Version: 0.1.1
+MIDlet-Version: 0.1.2
 MIDlet-Icon: /ic.png
 MicroEdition-Configuration: CLDC-1.1
 MIDlet-1: Activ,/ic.png,ActivApp

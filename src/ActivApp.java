@@ -25,6 +25,9 @@ import javax.microedition.rms.RecordStore;
 
 import cc.nnproject.json.JSONArray;
 import cc.nnproject.json.JSONObject;
+import zip.GZIPInputStream;
+import zip.Inflater;
+import zip.InflaterInputStream;
 
 public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemCommandListener {
 	
@@ -670,7 +673,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			if ((c = hc.getResponseCode()) >= 500) {
 				throw new IOException("HTTP ".concat(Integer.toString(c)));
 			}
-			res = JSONObject.parseJSON(readUtf(in = hc.openInputStream(), (int) hc.getLength()).trim());
+			res = JSONObject.parseJSON(readUtf(openInputStream(hc), (int) hc.getLength()));
 		} finally {
 			if (in != null) try {
 				in.close();
@@ -682,6 +685,20 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		return res;
 	}
 	
+	private static InputStream openInputStream(HttpConnection hc) throws IOException {
+		InputStream i = hc.openInputStream();
+		String enc = hc.getHeaderField("Content-Encoding");
+		if ("deflate".equalsIgnoreCase(enc)) {
+			System.out.println("Deflate compression");
+			i = new InflaterInputStream(i, new Inflater(true));
+		}
+		if ("gzip".equalsIgnoreCase(enc)) {
+			System.out.println("GZIP compression");
+			i = new GZIPInputStream(i);
+		}
+		return i;
+	}
+
 	private static String proxyUrl(String url) {
 //		System.out.println(url);
 //		if (url == null || !useProxy
@@ -710,6 +727,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		hc.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0");
 		hc.setRequestProperty("Accept", "application/json, text/plain, */*");
 		hc.setRequestProperty("Accept-Language", "en");
+		if (compress) hc.setRequestProperty("Accept-Encoding", "deflate");
 		hc.setRequestProperty("Origin", APIURL);
 		
 		hc.setRequestProperty("Authorization", accessToken == null ? "Basic V0VCOg==" : "Bearer ".concat(accessToken));
