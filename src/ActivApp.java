@@ -42,7 +42,9 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	
 	private static final String AUTH_RECORDNAME = "activauth";
 	
+	// api constants, can be changed to kcell
 	private static final String APIURL = "https://activ.kz/";
+	private static final String OPERATOR = "ACTIV";
 
 	// fonts
 	private static final Font medboldfont = Font.getFont(0, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
@@ -87,18 +89,17 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	private static int run;
 	private static int authRun;
 	private static boolean running;
+	
+	// settings
+	private static boolean compress = true;
 
 	public ActivApp() {
 		midlet = this;
 	}
 
-	protected void destroyApp(boolean unconditional) {
+	protected void destroyApp(boolean unconditional) {}
 
-	}
-
-	protected void pauseApp() {
-
-	}
+	protected void pauseApp() {}
 
 	protected void startApp() {
 		if (started) return;
@@ -108,6 +109,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		display.setCurrent(new Form("Activ"));
 		
 		try {
+			// load authorization
 			RecordStore r = RecordStore.openRecordStore(AUTH_RECORDNAME, false);
 			JSONObject j = JSONObject.parseObject(new String(r.getRecord(1), "UTF-8"));
 			r.closeRecordStore();
@@ -124,7 +126,8 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			subscriberId = j.getInt("subscriberId", 0);
 		} catch (Exception e) {}
 		
-		if (uuid == null) { // TODO check
+		if (uuid == null) {
+			// generate random uuid
 			StringBuffer sb = new StringBuffer();
 			Random rng = new Random();
 			for (int i = 0; i < 16; i++) {
@@ -181,15 +184,18 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			return;
 		}
 		if (c == List.SELECT_COMMAND) {
+			// accounts list item selected
 			int i = accountsList.getSelectedIndex();
 			if (i == -1) return;
 			if (i == accountsList.size() - 1) {
 				// log out
 				loginState = 0;
+				phoneNumber = currentMsisdn = refreshToken = accessToken = null;
 				writeAuth();
 				display(loginForm());
 				return;
 			}
+			// first is main, then child accounts
 			String msisdn = i == 0 ? phoneNumber : childAccounts.getObject(i - 1).getString("childMsisdn");
 			currentMsisdn = msisdn;
 			subscriberId = 0;
@@ -223,10 +229,10 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		running = true;
 		System.out.println("run ".concat(n(run)));
 		switch (run) {
-		case RUN_SEND_OTP: {
+		case RUN_SEND_OTP: { // send sms code
 			try {
 				JSONObject j = (JSONObject) apiPost("api/v1/auth/send-otp-by-sms",
-						("{\"operator\":\"ACTIV\",\"msisdn\":\"" + phoneNumber + "\"}").getBytes(),
+						("{\"operator\":\"" + OPERATOR + "\",\"msisdn\":\"" + phoneNumber + "\"}").getBytes(),
 						"application/json");
 			
 				if (j.has("error")) {
@@ -265,12 +271,13 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		}
 		case RUN_AUTH: {
 			JSONObject j = new JSONObject();
-			j.put("operator", "ACTIV");
+			j.put("operator", OPERATOR);
 			
 			if (loginState == STATE_LOGGED_IN) {
+				// refresh token if logged in
 				j.put("grant_type", "refresh_token");
 				j.put("refresh_token", refreshToken);
-			} else {
+			} else { // otherwise, check sms code
 				j.put("grant_type", "sms");
 				j.put("username", phoneNumber);
 				j.put("code", clearNumber(smsCodeField.getString()));
@@ -298,6 +305,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					loginState = STATE_LOGGED_IN;
 					
 					j = (JSONObject) api("api/v1/profile/login");
+					// check if auth was successful
 					if (!"SUCCESS".equals(j.getString("status"))) {
 						loginState = 0;
 						display(errorAlert("Log in failed"), loginForm());
@@ -309,6 +317,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				}
 				
 				if (subscriberId == 0) {
+					// get subcriber id
 					j = (JSONObject) api("api/v1/optionals/getSubscriberId");
 					subscriberId = j.getInt("subscriberId");
 				}
@@ -330,7 +339,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			}
 			break;
 		}
-		case RUN_AUTH_ACTION: {
+		case RUN_AUTH_ACTION: { // authorized action
 			Displayable f = display.getCurrent();
 			
 			long now = System.currentTimeMillis();
@@ -356,7 +365,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			}
 			break;
 		}
-		case RUN_MAIN: {
+		case RUN_MAIN: { // load main form
 			Form f = mainForm();
 			f.deleteAll();
 			
@@ -367,12 +376,14 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					currentMsisdn = phoneNumber;
 				
 				if (subscriberId == 0) {
+					// get subcriber id, if it was reset by changing multi-account
 					subscriberId = ((JSONObject) api("api/v1/optionals/getSubscriberId")).getInt("subscriberId");
 					writeAuth();
 				}
 				
 				JSONArray j;
 				if (!phoneNumber.equals(currentMsisdn) && childAccounts == null) {
+					// child account selected, get main account info first
 					String v = "{\"msisdn\":\"".concat(phoneNumber).concat("\"}");
 					
 					StringBuffer sb = new StringBuffer();
@@ -383,8 +394,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 					j = (JSONArray) apiPost("graphql", sb.toString().getBytes(), "application/json");
 
 					childAccounts = j.getObject(0).getObject("data").getObject("Profile").getArray("childAccounts");
-					if (childAccounts.size() == 0)
-						f.removeCommand(accountCmd);
 				}
 				{
 					String v = "{\"msisdn\":\"".concat(currentMsisdn).concat("\"}");
@@ -405,21 +414,19 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 
 				if (phoneNumber.equals(currentMsisdn)) {
 					childAccounts = t.getArray("childAccounts");
-					if (childAccounts.size() == 0)
-						f.removeCommand(accountCmd);
 				}
 				
 				StringItem s;
 				Spacer p;
 				Gauge g;
 				
-				// номер телефона
+				// phone number
 				s = new StringItem("", "+".concat(t.getString("id")));
 				s.setFont(medboldfont);
 				s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
 				mainForm.append(s);
 				
-				// имя
+				// user name
 				JSONObject fullname = t.getObject("fullName");
 				s = new StringItem("", fullname.getString("firstName").concat(" ").concat(fullname.getString("lastName", "")));
 				s.setFont(smallfont);
@@ -434,22 +441,22 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 
 				t = j.getObject(2).getObject("data").getObject("Profile").getObject("tariff");
 				
-				// название тарифа
+				// tariff name
 				s = new StringItem("", t.getString("name"));
 				s.setFont(smallboldfont);
 				s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
 				mainForm.append(s);
 				
-				// цена тарифа
+				// tariff cost and due date, if paid
 				if (!t.isNull("cost")) {
-					String date = t.getString("nextTariffDebitingDate"); // TODO
+					String date = t.getString("nextTariffDebitingDate"); // TODO parse date
 					s = new StringItem("", t.getString("cost").concat(" tenge").concat(date != null ? (", due ".concat(date)) : ""));
 					s.setFont(smallfont);
 					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
 					mainForm.append(s);
 				}
 				
-				// баланс
+				// balance
 				s = new StringItem("Balance",
 						j.getObject(1).getObject("data").getObject("Profile").getObject("balanceInfo").getString("value")
 						+ " T");
@@ -462,7 +469,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				p.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
 				mainForm.append(p);
 				
-				// остаток тарифа
+				// tariff remainings, if any
 				JSONArray sum = j.getObject(2).getObject("data").getObject("Profile").getArray("bonusSum");
 				int l = sum.size();
 				if (l != 0) {
@@ -538,7 +545,11 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		f.setCommandListener(this);
 		f.addCommand(exitCmd);
 		
-		phoneField = new TextField("Phone number", "", 30, TextField.PHONENUMBER);
+		try {
+			phoneField = new TextField("Phone number", "+7", 30, TextField.PHONENUMBER);
+		} catch (Exception e) { // MIDP moment
+			phoneField = new TextField("Phone number", "", 30, TextField.PHONENUMBER);
+		}
 		phoneField.addCommand(sendSmsCmd);
 		f.append(phoneField);
 		
@@ -694,16 +705,17 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	
 	private static HttpConnection open(String url) throws IOException {
 		HttpConnection hc = (HttpConnection) Connector.open(url);
-		
+
+		// TODO compression support, e.g gzip, deflate
 		hc.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0");
 		hc.setRequestProperty("Accept", "application/json, text/plain, */*");
 		hc.setRequestProperty("Accept-Language", "en");
-		hc.setRequestProperty("Origin", "https://activ.kz");
+		hc.setRequestProperty("Origin", APIURL);
 		
 		hc.setRequestProperty("Authorization", accessToken == null ? "Basic V0VCOg==" : "Bearer ".concat(accessToken));
 		
 		hc.setRequestProperty("X-Platform", "WEB");
-		hc.setRequestProperty("X-Customer-Operator-type", "ACTIV");
+		hc.setRequestProperty("X-Customer-Operator-type", OPERATOR);
 		hc.setRequestProperty("X-Current-Customer-MSISDN", currentMsisdn != null ? currentMsisdn : "");
 		hc.setRequestProperty("X-Device-Name", "Win32"); // TODO
 		if (uuid != null) hc.setRequestProperty("X-device-uuid", uuid);

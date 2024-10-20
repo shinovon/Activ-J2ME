@@ -216,9 +216,6 @@ public class JSONObject {
 		return table.get(name) == json_null;
 	}
 	
-	/**
-	 * @deprecated
-	 */
 	public void put(String name, Object obj) {
 		table.put(name, getJSON(obj));
 	}
