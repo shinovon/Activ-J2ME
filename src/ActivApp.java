@@ -276,11 +276,15 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			JSONObject j = new JSONObject();
 			j.put("operator", OPERATOR);
 			
-			if (loginState == STATE_LOGGED_IN) {
+			if (loginState == STATE_LOGGED_IN && refreshToken != null) {
 				// refresh token if logged in
 				j.put("grant_type", "refresh_token");
 				j.put("refresh_token", refreshToken);
 			} else { // otherwise, check sms code
+				if (phoneNumber == null || smsCodeField == null) {
+					display(loginForm());
+					break;
+				}
 				j.put("grant_type", "sms");
 				j.put("username", phoneNumber);
 				j.put("code", clearNumber(smsCodeField.getString()));
@@ -346,10 +350,10 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			Displayable f = display.getCurrent();
 			
 			long now = System.currentTimeMillis();
-			if (now - accessTokenTime >= expiresIn * 1000L - 2000L)
+			if (now - accessTokenTime >= expiresIn * 1000L - 3000L)
 				accessToken = null;
 			
-			if (accessToken == null) {
+			if (accessToken == null || refreshToken == null) {
 				Alert a = loadingAlert();
 				a.setString("Authorizing");
 				display(a, f);
@@ -637,10 +641,10 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			hc = open(proxyUrl(APIURL.concat(url)));
 			hc.setRequestMethod("GET");
 			int c;
-			if ((c = hc.getResponseCode()) >= 500) {
+			if ((c = hc.getResponseCode()) >= 400) {
 				throw new IOException("HTTP ".concat(Integer.toString(c)));
 			}
-			res = JSONObject.parseJSON(readUtf(in = hc.openInputStream(), (int) hc.getLength()));
+			res = JSONObject.parseJSON(readUtf(in = openInputStream(hc), (int) hc.getLength()));
 		} finally {
 			if (in != null) try {
 				in.close();
@@ -688,14 +692,10 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	private static InputStream openInputStream(HttpConnection hc) throws IOException {
 		InputStream i = hc.openInputStream();
 		String enc = hc.getHeaderField("Content-Encoding");
-		if ("deflate".equalsIgnoreCase(enc)) {
-			System.out.println("Deflate compression");
+		if ("deflate".equalsIgnoreCase(enc))
 			i = new InflaterInputStream(i, new Inflater(true));
-		}
-		if ("gzip".equalsIgnoreCase(enc)) {
-			System.out.println("GZIP compression");
+		else if ("gzip".equalsIgnoreCase(enc))
 			i = new GZIPInputStream(i);
-		}
 		return i;
 	}
 
@@ -727,7 +727,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		hc.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0");
 		hc.setRequestProperty("Accept", "application/json, text/plain, */*");
 		hc.setRequestProperty("Accept-Language", "en");
-		if (compress) hc.setRequestProperty("Accept-Encoding", "deflate");
+		if (compress) hc.setRequestProperty("Accept-Encoding", "gzip, deflate");
 		hc.setRequestProperty("Origin", APIURL);
 		
 		hc.setRequestProperty("Authorization", accessToken == null ? "Basic V0VCOg==" : "Bearer ".concat(accessToken));
