@@ -1,7 +1,9 @@
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Calendar;
 import java.util.Random;
+import java.util.Vector;
 
 import javax.microedition.io.Connector;
 import javax.microedition.io.HttpConnection;
@@ -456,7 +458,8 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 				
 				// tariff cost and due date, if paid
 				if (!t.isNull("cost")) {
-					String date = t.getString("nextTariffDebitingDate"); // TODO parse date
+					String date = date(t.getString("nextTariffDebitingDate"));
+					
 					s = new StringItem("", t.getString("cost").concat(" tenge").concat(date != null ? (", due ".concat(date)) : ""));
 					s.setFont(smallfont);
 					s.setLayout(Item.LAYOUT_LEFT | Item.LAYOUT_NEWLINE_BEFORE | Item.LAYOUT_NEWLINE_AFTER);
@@ -641,7 +644,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 			hc = open(proxyUrl(APIURL.concat(url)));
 			hc.setRequestMethod("GET");
 			int c;
-			if ((c = hc.getResponseCode()) >= 400) {
+			if ((c = hc.getResponseCode()) >= 500) {
 				throw new IOException("HTTP ".concat(Integer.toString(c)));
 			}
 			res = JSONObject.parseJSON(readUtf(in = openInputStream(hc), (int) hc.getLength()));
@@ -722,8 +725,6 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 	
 	private static HttpConnection open(String url) throws IOException {
 		HttpConnection hc = (HttpConnection) Connector.open(url);
-
-		// TODO compression support, e.g gzip, deflate
 		hc.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:131.0) Gecko/20100101 Firefox/131.0");
 		hc.setRequestProperty("Accept", "application/json, text/plain, */*");
 		hc.setRequestProperty("Accept-Language", "en");
@@ -735,7 +736,7 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		hc.setRequestProperty("X-Platform", "WEB");
 		hc.setRequestProperty("X-Customer-Operator-type", OPERATOR);
 		hc.setRequestProperty("X-Current-Customer-MSISDN", currentMsisdn != null ? currentMsisdn : "");
-		hc.setRequestProperty("X-Device-Name", "Win32"); // TODO
+		hc.setRequestProperty("X-Device-Name", "Win32"); // 
 		if (uuid != null) hc.setRequestProperty("X-device-uuid", uuid);
 		
 		StringBuffer sb = new StringBuffer
@@ -802,10 +803,80 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		return "%".concat(s.length() < 2 ? "0" : "").concat(s);
 	}
 	
+	static String date(String date) {
+		if (date == null) return null;
+		if (date.indexOf('T') != -1) {
+			String[] dateSplit = split(date.substring(0, date.indexOf('T')), '-');
+			String[] timeSplit = split(date.substring(date.indexOf('T')+1), ':');
+			String second = split(timeSplit[2], '.')[0];
+			int i = second.indexOf('+');
+			if (i == -1) {
+				i = second.indexOf('-');
+			}
+			if (i != -1) {
+				second = second.substring(0, i);
+			}
+			return Integer.parseInt(dateSplit[2]) + " " + localizeMonth(Integer.parseInt(dateSplit[1])-1) + " "
+			+ n(Integer.parseInt(timeSplit[0])) + ":" + n(Integer.parseInt(timeSplit[1]));
+		}
+		
+		String[] dateSplit = split(date, '-');
+		return Integer.parseInt(dateSplit[2]) + " " + localizeMonth(Integer.parseInt(dateSplit[1])-1);
+	}
+	
+	static String localizeMonth(int month) {
+		switch(month) {
+		case Calendar.JANUARY:
+			return "Jan";
+		case Calendar.FEBRUARY:
+			return "Feb";
+		case Calendar.MARCH:
+			return "Mar";
+		case Calendar.APRIL:
+			return "Apr";
+		case Calendar.MAY:
+			return "May";
+		case Calendar.JUNE:
+			return "Jun";
+		case Calendar.JULY:
+			return "Jul";
+		case Calendar.AUGUST:
+			return "Aug";
+		case Calendar.SEPTEMBER:
+			return "Sep";
+		case Calendar.OCTOBER:
+			return "Oct";
+		case Calendar.NOVEMBER:
+			return "Nov";
+		case Calendar.DECEMBER:
+			return "Dec";
+		default:
+			return "";
+		}
+	}
+	
 	static String n(int n) {
 		if (n < 10) {
 			return "0".concat(Integer.toString(n));
 		} else return Integer.toString(n);
+	}
+	
+	static String[] split(String str, char d) {
+		int i = str.indexOf(d);
+		if (i == -1)
+			return new String[] {str};
+		Vector v = new Vector();
+		v.addElement(str.substring(0, i));
+		while (i != -1) {
+			str = str.substring(i + 1);
+			if ((i = str.indexOf(d)) != -1)
+				v.addElement(str.substring(0, i));
+			i = str.indexOf(d);
+		}
+		v.addElement(str);
+		String[] r = new String[v.size()];
+		v.copyInto(r);
+		return r;
 	}
 	
 	private static String clearNumber(String s) {
