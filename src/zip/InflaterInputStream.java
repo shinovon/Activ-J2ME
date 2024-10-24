@@ -75,7 +75,7 @@ public class InflaterInputStream extends InputStream {
 	 */
 	private byte[] onebytebuffer = new byte[1];
 
-	static final int BUF_SIZE = 1024;
+	static final int BUF_SIZE = 4096;
 
 	/**
 	 * Create an InflaterInputStream with the default decompresseor and a default
@@ -95,7 +95,7 @@ public class InflaterInputStream extends InputStream {
 	 * @param inf the decompressor used to decompress data read from in
 	 */
 	public InflaterInputStream(InputStream in, Inflater inf) {
-		this(in, inf, 4096);
+		this(in, inf, BUF_SIZE);
 	}
 
 	/**

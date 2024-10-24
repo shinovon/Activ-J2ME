@@ -83,19 +83,19 @@ public class Inflater {
 			11, 12, 12, 13, 13 };
 
 	/* This are the state in which the inflater can be. */
-//private static final int DECODE_HEADER           = 0;
-//private static final int DECODE_DICT             = 1;
+	//private static final int DECODE_HEADER           = 0;
+	//private static final int DECODE_DICT             = 1;
 	private static final int DECODE_BLOCKS = 2;
-//private static final int DECODE_STORED_LEN1      = 3;
-//private static final int DECODE_STORED_LEN2      = 4;
-//private static final int DECODE_STORED           = 5;
-//private static final int DECODE_DYN_HEADER       = 6;
+	//private static final int DECODE_STORED_LEN1      = 3;
+	//private static final int DECODE_STORED_LEN2      = 4;
+	//private static final int DECODE_STORED           = 5;
+	//private static final int DECODE_DYN_HEADER       = 6;
 	private static final int DECODE_HUFFMAN = 7;
 	private static final int DECODE_HUFFMAN_LENBITS = 8;
 	private static final int DECODE_HUFFMAN_DIST = 9;
 	private static final int DECODE_HUFFMAN_DISTBITS = 10;
-//private static final int DECODE_CHKSUM           = 11;
-//private static final int FINISHED                = 12;
+	//private static final int DECODE_CHKSUM           = 11;
+	//private static final int FINISHED                = 12;
 
 	/** This variable contains the current state. */
 	private int mode;
