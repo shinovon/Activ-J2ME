@@ -592,9 +592,11 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 
 		l.append("My number", null);
 		
-		int size = childAccounts.size();
-		for (int i = 0; i < size; ++i) {
-			l.append(childAccounts.getObject(i).getString("name"), null);
+		if (childAccounts != null) {
+			int size = childAccounts.size();
+			for (int i = 0; i < size; ++i) {
+				l.append(childAccounts.getObject(i).getString("name"), null);
+			}
 		}
 		
 		l.append("Log out", null);
@@ -808,14 +810,16 @@ public class ActivApp extends MIDlet implements Runnable, CommandListener, ItemC
 		if (date.indexOf('T') != -1) {
 			String[] dateSplit = split(date.substring(0, date.indexOf('T')), '-');
 			String[] timeSplit = split(date.substring(date.indexOf('T')+1), ':');
-			String second = split(timeSplit[2], '.')[0];
-			int i = second.indexOf('+');
-			if (i == -1) {
-				i = second.indexOf('-');
-			}
-			if (i != -1) {
-				second = second.substring(0, i);
-			}
+//			if (timeSplit.length == 3) {
+//				String second = split(timeSplit[2], '.')[0];
+//				int i = second.indexOf('+');
+//				if (i == -1) {
+//					i = second.indexOf('-');
+//				}
+//				if (i != -1) {
+//					second = second.substring(0, i);
+//				}
+//			}
 			return Integer.parseInt(dateSplit[2]) + " " + localizeMonth(Integer.parseInt(dateSplit[1])-1) + " "
 			+ n(Integer.parseInt(timeSplit[0])) + ":" + n(Integer.parseInt(timeSplit[1]));
 		}
